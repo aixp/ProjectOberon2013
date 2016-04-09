@@ -1,4 +1,4 @@
-MODULE ORG; (* NW  24.6.2014  code generator in Oberon-07 for RISC*)
+MODULE ORG; (* NW  4.3.2016  code generator in Oberon-07 for RISC*)
   IMPORT SYSTEM, Files, ORS, ORB;
   (*Code generator for Oberon compiler for RISC processor.
      Procedural interface to Parser OSAP; result in array "code".
@@ -64,7 +64,7 @@ MODULE ORG; (* NW  24.6.2014  code generator in Oberon-07 for RISC*)
   END Put1;
 
   PROCEDURE Put1a(op, a, b, im: LONGINT);
-  BEGIN (*same as Pu1, but with range test  -10000H <= im < 10000H*)
+  BEGIN (*same as Put1, but with range test  -10000H <= im < 10000H*)
     IF (im >= -10000H) & (im <= 0FFFFH) THEN Put1(op, a, b, im)
     ELSE Put1(Mov+U, RH, 0, im DIV 10000H);
       IF im MOD 10000H # 0 THEN Put1(Ior, RH, RH, im MOD 10000H) END ;
@@ -571,7 +571,9 @@ MODULE ORG; (* NW  24.6.2014  code generator in Oberon-07 for RISC*)
       load(x);
       IF (y.a # 0) OR ~(op IN {ORS.eql, ORS.neq}) OR (code[pc-1] DIV 40000000H # -2) THEN Put1a(Cmp, x.r, x.r, y.a) END ;
       DEC(RH)
-    ELSE load(x); load(y); Put0(Cmp, x.r, x.r, y.r); DEC(RH, 2)
+    ELSE
+      IF (x.mode = Cond) OR (y.mode = Cond) THEN ORS.Mark("not implemented") END ;
+      load(x); load(y); Put0(Cmp, x.r, x.r, y.r); DEC(RH, 2)
     END ;
     SetCC(x, relmap[op - ORS.eql])
   END IntRelation;
@@ -633,8 +635,8 @@ MODULE ORG; (* NW  24.6.2014  code generator in Oberon-07 for RISC*)
   BEGIN loadAdr(x); loadAdr(y);
     IF (x.type.form = ORB.Array) & (x.type.len > 0) THEN
       IF y.type.len >= 0 THEN 
-        IF x.type.len >= y.type.len THEN Put1a(Mov, RH, 0, (y.type.size+3) DIV 4)
-        ELSE ORS.Mark("source array too long")
+        IF x.type.size = y.type.size THEN Put1a(Mov, RH, 0, (y.type.size+3) DIV 4)
+        ELSE ORS.Mark("different length/size, not implemented")
         END
       ELSE (*y is open array*)
         Put2(Ldr, RH, SP, y.a+4); s := y.type.base.size;  (*element size*)
@@ -652,7 +654,7 @@ MODULE ORG; (* NW  24.6.2014  code generator in Oberon-07 for RISC*)
     END ;
     Put2(Ldr, RH+1, y.r, 0); Put1(Add, y.r, y.r, 4);
     Put2(Str, RH+1, x.r, 0); Put1(Add, x.r, x.r, 4);
-    Put1(Sub, RH, RH, 1); Put3(BC, NE, -6); DEC(RH, 2)
+    Put1(Sub, RH, RH, 1); Put3(BC, NE, -6); RH := 0
   END StoreStruct;
 
   PROCEDURE CopyString*(VAR x, y: Item);  (*from x to y*)
@@ -936,7 +938,7 @@ MODULE ORG; (* NW  24.6.2014  code generator in Oberon-07 for RISC*)
 
   PROCEDURE Ord*(VAR x: Item);
   BEGIN
-    IF x.mode IN {ORB.Var, ORB.Par, RegI} THEN load(x) END
+    IF x.mode IN {ORB.Var, ORB.Par, RegI, Cond} THEN load(x) END
   END Ord;
 
   PROCEDURE Len*(VAR x: Item);
